@@ -1,0 +1,75 @@
+#!/bin/sh
+#set -x;
+BLOCKCHAIN=/data/blockchain
+mkdir -p $BLOCKCHAIN
+
+
+if [ -f "${BLOCKCHAIN}/clear" ]; then
+  rm -rf $BLOCKCHAIN/*
+  cp /electrumx/deployment/scribe.conf $BLOCKCHAIN/
+fi
+
+CONF_FILE=$BLOCKCHAIN/scribe.conf
+if [ ! -e "${CONF_FILE}" ]; then
+  cp /electrumx/deployment/scribe.conf $BLOCKCHAIN
+fi
+
+if [ ! -e "${DAEMON_BIN}" ]; then
+  ARHV=/tmp/scribe/arhv
+  mkdir -p $ARHV
+  mkdir -p $DB_DIRECTORY
+  wget $DAEMON_BIN_URL -P $ARHV
+  
+  DAEMON_TMP=/tmp/scribe
+  mkdir -p $DAEMON_TMP/out/ 
+  case $DAEMON_BIN_URL in
+      *.tar.bz2)  tar xjf $ARHV/*.tar.bz2 -C $DAEMON_TMP/out/     ;;
+      *.tar.gz)   tar xzf $ARHV/*.tar.gz -C $DAEMON_TMP/out/     ;;
+      #*.bz2)      bunzip2 $DAEMON_BIN_URL ?? $DAEMON_TMP/out/    ;;
+      #*.gz)       gunzip $DAEMON_BIN_URL ?? $DAEMON_TMP/out/     ;;
+      *.tar)      tar xf $ARHV/*.tar -C $DAEMON_TMP/out/      ;;
+      *.tbz2)     tar xjf $ARHV/*.tbz2 -C $DAEMON_TMP/out/     ;;
+      *.tgz)      tar xzf $ARHV/*.tgz -C $DAEMON_TMP/out/     ;;
+      *.zip)      unzip $ARHV/*.zip -d $DAEMON_TMP/out/       ;;
+      *.rar)      rar x $ARHV/*.rar $DAEMON_TMP/out/       ;; 
+      *)          echo "'$DAEMON_BIN_URL' cannot be extracted via extract()" ;;
+  esac
+
+  cp $DAEMON_TMP/out/* /data/daemon/ 2>/dev/null
+  cp $DAEMON_TMP/out/**/* /data/daemon/ 2>/dev/null
+
+  mkdir -p /data/daemon/
+  find $DAEMON_TMP/out/ -type f -mindepth 2 -exec mv -i -- {} /data/daemon/ \;
+  chmod +x /data/daemon/*
+fi
+
+if [ ! -e "${SSL_CERTFILE}" ] || [ ! -e "${SSL_KEYFILE}" ]; then
+  openssl req -newkey rsa:2048 -sha256 -nodes -x509 -days 365 -subj "/O=ElectrumX" -keyout "${SSL_KEYFILE}" -out "${SSL_CERTFILE}"
+fi
+
+
+pm2 start /electrumx/bin/cron --name=compact_history --interpreter=bash
+pm2 start /electrumx/electrumx_server --name scribe  --interpreter=python3.6
+
+bitcoind="/data/daemon/scribed --daemon --datadir=$BLOCKCHAIN"
+
+### RUN BITCOIN
+$bitcoind
+while /bin/true; do
+  ps aux |grep scribed |grep -q -v grep
+  BITCOIN_PROCESS=$?
+  if [ $BITCOIN_PROCESS -ne 0 ]; then
+    $bitcoind
+    sleep 120
+    ps aux |grep scribed |grep -q -v grep
+    BITCOIN_PROCESS=$?
+    if [ $BITCOIN_PROCESS -ne 0 ]; then
+       touch $BLOCKCHAIN/clear
+       exit -1
+    fi
+  fi
+  sleep 240
+done
+
+
+

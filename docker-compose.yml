@@ -1,0 +1,17 @@
+version: "3.7"
+services:
+  electrumx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HASH_MODULE: "git+https://github.com/wakiyamap/lyra2re-hash-python.git"
+        DAEMON_BIN_URL: "https://github.com/scribenetwork/scribe/releases/download/v0.3/scribe-ubuntu-16.04-x64.tar.gz"
+    environment:
+      DAEMON_BIN_URL: https://github.com/scribenetwork/scribe/releases/download/v0.3/scribe-ubuntu-16.04-x64.tar.gz
+    restart: always
+    volumes:
+      - ./data:/data
+    ports:
+      - "33001:33001"
+      - "34001:34001"

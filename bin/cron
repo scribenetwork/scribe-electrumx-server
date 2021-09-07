@@ -1,0 +1,7 @@
+#!/bin/sh
+#set -x;
+sleep 604800 # 1 week 
+/usr/bin/pm2 stop scribe
+/usr/bin/python3.6 /electrumx/compact_history.py
+/usr/bin/pm2 start scribe
+
